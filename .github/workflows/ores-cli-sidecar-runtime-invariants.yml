@@ -14,6 +14,7 @@ concurrency:
   group: ores-cli-sidecar-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Exact-head public certification for ORESoftware/ores-cli#212 after rustfmt cleanup.
 env:
   ORES_CLI_SHA: 568b48a265b0be22fe00d128767dd6666b54c890
   ORES_CLI_SIDECAR_MODULE_BLOB: 140e32b34b038c9b7be271d2152647065b17a3f1

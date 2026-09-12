@@ -14,12 +14,14 @@ concurrency:
   group: ores-cli-runtime-env-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Final read-only exact-head certification after formatter cleanup.
+# Exact-source current-main certification. Product source is represented by an
+# immutable Git blob and candidate commit; no private-repository checkout is
+# required from this public *-test runner.
 env:
-  ORES_CLI_SHA: 93827083f89d90e2bd2c676e11a1b0904c01aef9
+  ORES_CLI_SHA: 1af7d4a15f50ffdaef7e09b0beeabcb4e3c90dcd
   ORES_CLI_ENV_BOUNDARY_BLOB: c9a92566914447c3dd58b62c5543440ae2d75485
   ORES_SIDECAR_SHA: 031e6e50982db3458449e7098529bf7b0db078f8
-  TJSV_SHA: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+  TJSV_SHA: 53152aba01d11620a5a316d5685b962e0b87a3b8
 
 jobs:
   certify:
@@ -46,7 +48,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
         with:
-          toolchain: '1.88.0'
+          toolchain: '1.95.0'
           components: rustfmt, clippy
 
       - name: Cargo check exact env-boundary module

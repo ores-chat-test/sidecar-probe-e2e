@@ -1,0 +1,15 @@
+[package]
+name = "ores-cli-sidecar-lint-canary"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"

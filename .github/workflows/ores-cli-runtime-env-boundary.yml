@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'canary/ores-cli-runtime-env-boundary-module/**'
+      - 'evidence/ores-cli-248/**'
       - '.github/workflows/ores-cli-runtime-env-boundary.yml'
   workflow_dispatch:
 
@@ -14,10 +15,11 @@ concurrency:
   group: ores-cli-runtime-env-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Final read-only exact-head certification after formatter cleanup.
+# Read-only exact-source certification for the current-main semantic successor.
 env:
-  ORES_CLI_SHA: 93827083f89d90e2bd2c676e11a1b0904c01aef9
+  ORES_CLI_SHA: 1af7d4a15f50ffdaef7e09b0beeabcb4e3c90dcd
   ORES_CLI_ENV_BOUNDARY_BLOB: c9a92566914447c3dd58b62c5543440ae2d75485
+  ORES_CLI_DISPATCHER_BLOB: 7e00b188ce5e9bff72619bbb0ea1a007ced583bc
   ORES_SIDECAR_SHA: 031e6e50982db3458449e7098529bf7b0db078f8
   TJSV_SHA: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
 
@@ -31,17 +33,28 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify exact ores-cli runtime env-boundary source
+      - name: Verify exact ores-cli runtime env-boundary source and dispatcher
         shell: bash
         run: |
           set -euo pipefail
           module='canary/ores-cli-runtime-env-boundary-module/src/audit/runtime_toml_env_boundary.rs'
+          dispatcher='evidence/ores-cli-248/audit-mod.rs'
           test "$(git hash-object "$module")" = "$ORES_CLI_ENV_BOUNDARY_BLOB"
+          test "$(git hash-object "$dispatcher")" = "$ORES_CLI_DISPATCHER_BLOB"
           grep -F "$ORES_CLI_SHA" .github/workflows/ores-cli-runtime-env-boundary.yml
+          grep -F 'mod runtime_toml_env_boundary;' "$dispatcher"
           grep -F 'runtime-secret-env-exposed-via-cli' "$module"
           grep -F 'runtime-rpc-secret-allows-argv' "$module"
           grep -F '.ores-rl.toml' "$module"
           grep -F '.ores-lru.toml' "$module"
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('evidence/ores-cli-248/audit-mod.rs').read_text()
+          rate = text.index('runtime_toml_rate_limit::augment_rate_limit_runtime_toml_audit')
+          env = text.index('runtime_toml_env_boundary::augment_runtime_toml_env_boundary_audit')
+          otel = text.index('runtime_toml_otel::augment_otel_runtime_toml_audit')
+          assert rate < env < otel, 'runtime env boundary must execute after rate-limit and before OTel'
+          PY
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
@@ -128,10 +141,11 @@ jobs:
           assert.equal(generated.$schema, 'https://json-schema.org/draft/2020-12/schema');
           NODE
 
-      - name: Prove authored authorities and certified Rust source remain immutable
+      - name: Prove authored authorities and certified sources remain immutable
         shell: bash
         run: |
           set -euo pipefail
           git -C "$RUNNER_TEMP/ores-sidecar" diff --exit-code -- contracts/main.tsp contracts/authored.schema.json contracts/instances
           test "$(git hash-object canary/ores-cli-runtime-env-boundary-module/src/audit/runtime_toml_env_boundary.rs)" = "$ORES_CLI_ENV_BOUNDARY_BLOB"
-          git diff --exit-code -- canary/ores-cli-runtime-env-boundary-module .github/workflows/ores-cli-runtime-env-boundary.yml
+          test "$(git hash-object evidence/ores-cli-248/audit-mod.rs)" = "$ORES_CLI_DISPATCHER_BLOB"
+          git diff --exit-code -- canary/ores-cli-runtime-env-boundary-module evidence/ores-cli-248 .github/workflows/ores-cli-runtime-env-boundary.yml

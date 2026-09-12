@@ -14,6 +14,7 @@ concurrency:
   group: ores-cli-runtime-env-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Final read-only exact-head certification after formatter cleanup.
 env:
   ORES_CLI_SHA: 93827083f89d90e2bd2c676e11a1b0904c01aef9
   ORES_CLI_ENV_BOUNDARY_BLOB: c9a92566914447c3dd58b62c5543440ae2d75485

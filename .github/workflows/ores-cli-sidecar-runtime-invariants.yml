@@ -45,15 +45,27 @@ jobs:
           toolchain: '1.88.0'
           components: rustfmt, clippy
 
-      - name: Compile and test exact ores-cli sidecar lint module
+      - name: Cargo check exact sidecar lint module
+        working-directory: canary/ores-cli-sidecar-module
+        run: cargo check --all-targets
+
+      - name: Clippy exact sidecar lint module
+        working-directory: canary/ores-cli-sidecar-module
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test exact sidecar lint module
+        working-directory: canary/ores-cli-sidecar-module
+        run: cargo test --all-targets
+
+      - name: Rustfmt exact sidecar lint module
+        working-directory: canary/ores-cli-sidecar-module
+        run: cargo fmt --all -- --check
+
+      - name: Require sidecar lint regression markers
         working-directory: canary/ores-cli-sidecar-module
         shell: bash
         run: |
           set -euo pipefail
-          cargo fmt --all -- --check
-          cargo check --all-targets
-          cargo clippy --all-targets -- -D warnings
-          cargo test --all-targets
           grep -F 'sidecar-runtime-lru-path' src/audit/runtime_toml_sidecar.rs
           grep -F 'sidecar-loopback-bind' src/audit/runtime_toml_sidecar.rs
           grep -F 'sidecar-runtime-key-sensitive' src/audit/runtime_toml_sidecar.rs

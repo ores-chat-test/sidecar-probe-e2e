@@ -1,0 +1,136 @@
+name: ores-cli runtime env boundary
+
+on:
+  pull_request:
+    paths:
+      - 'canary/ores-cli-runtime-env-boundary-module/**'
+      - '.github/workflows/ores-cli-runtime-env-boundary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ores-cli-runtime-env-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORES_CLI_SHA: 576c09d1db2f4d78ca1c10f761be2a0159618b39
+  ORES_CLI_ENV_BOUNDARY_BLOB: b87cf3d204a9ecbf9175de50130d293e86091aec
+  ORES_SIDECAR_SHA: 031e6e50982db3458449e7098529bf7b0db078f8
+  TJSV_SHA: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout test-org canary
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify exact ores-cli runtime env-boundary source
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='canary/ores-cli-runtime-env-boundary-module/src/audit/runtime_toml_env_boundary.rs'
+          test "$(git hash-object "$module")" = "$ORES_CLI_ENV_BOUNDARY_BLOB"
+          grep -F "$ORES_CLI_SHA" .github/workflows/ores-cli-runtime-env-boundary.yml
+          grep -F 'runtime-secret-env-exposed-via-cli' "$module"
+          grep -F 'runtime-rpc-secret-allows-argv' "$module"
+          grep -F '.ores-rl.toml' "$module"
+          grep -F '.ores-lru.toml' "$module"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: '1.88.0'
+          components: rustfmt, clippy
+
+      - name: Cargo check exact env-boundary module
+        working-directory: canary/ores-cli-runtime-env-boundary-module
+        run: cargo check --all-targets
+
+      - name: Clippy exact env-boundary module
+        working-directory: canary/ores-cli-runtime-env-boundary-module
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test exact env-boundary module
+        working-directory: canary/ores-cli-runtime-env-boundary-module
+        run: cargo test --all-targets
+
+      - name: Rustfmt exact production env-boundary source
+        working-directory: canary/ores-cli-runtime-env-boundary-module
+        run: rustfmt --edition 2024 --check src/audit/runtime_toml_env_boundary.rs
+
+      - name: Install Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: '22.16.0'
+
+      - name: Checkout immutable public sidecar and TJSV sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/ores-sidecar"
+          git -C "$RUNNER_TEMP/ores-sidecar" remote add origin https://github.com/ORESoftware/ores-sidecar.rs.git
+          git -C "$RUNNER_TEMP/ores-sidecar" fetch --depth=1 origin "$ORES_SIDECAR_SHA"
+          git -C "$RUNNER_TEMP/ores-sidecar" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/ores-sidecar" rev-parse HEAD)" = "$ORES_SIDECAR_SHA"
+
+          git init "$RUNNER_TEMP/tjsv"
+          git -C "$RUNNER_TEMP/tjsv" remote add origin https://github.com/ORESoftware/typespec-json-schema-validator.git
+          git -C "$RUNNER_TEMP/tjsv" fetch --depth=1 origin "$TJSV_SHA"
+          git -C "$RUNNER_TEMP/tjsv" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/tjsv" rev-parse HEAD)" = "$TJSV_SHA"
+
+      - name: Install immutable TJSV dependency graph
+        working-directory: ${{ runner.temp }}/tjsv
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: Execute TypeSpec to comparison Schema B and compare with authored Schema A
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tjsv-generated"
+          report="$RUNNER_TEMP/tjsv-report.json"
+          ir="$RUNNER_TEMP/tjsv-contract-ir.json"
+          node "$RUNNER_TEMP/tjsv/bin/typespec-json-schema-validator.mjs" check \
+            --typespec="$RUNNER_TEMP/ores-sidecar/contracts/main.tsp" \
+            --schema="$RUNNER_TEMP/ores-sidecar/contracts/authored.schema.json" \
+            --instances="$RUNNER_TEMP/ores-sidecar/contracts/instances" \
+            --output-dir="$out" \
+            --report="$report" \
+            --contract-ir="$ir" \
+            --quiet
+          test -s "$out/typespec.generated.schema.json"
+          REPORT="$report" IR="$ir" GENERATED="$out/typespec.generated.schema.json" node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const report = JSON.parse(fs.readFileSync(process.env.REPORT, 'utf8'));
+          const ir = JSON.parse(fs.readFileSync(process.env.IR, 'utf8'));
+          const generated = JSON.parse(fs.readFileSync(process.env.GENERATED, 'utf8'));
+          assert.equal(report.status, 'passed');
+          assert.equal(report.zeroUnexplainedFindings, true);
+          assert.equal(report.authorities.typespec.authority, 'independently-authored');
+          assert.equal(report.authorities.jsonSchema.authority, 'independently-authored');
+          assert.equal(report.authorities.precedence, 'none');
+          assert.equal(report.authorities.typespec.generatedJsonSchemaRole, 'comparison-evidence-only');
+          assert.equal(report.coverage.typespecGeneratedJsonSchemaComparison, true);
+          assert.equal(report.coverage.differentialInstanceValidation, true);
+          assert.equal(ir.authorities.typespec, 'independently-authored');
+          assert.equal(ir.authorities.jsonSchema, 'independently-authored');
+          assert.equal(ir.authorities.generatedJsonSchema, 'comparison-evidence-only');
+          assert.equal(ir.authorities.precedence, 'none');
+          assert.equal(ir.editableAuthority, false);
+          assert.equal(generated.$schema, 'https://json-schema.org/draft/2020-12/schema');
+          NODE
+
+      - name: Prove authored authorities and certified Rust source remain immutable
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/ores-sidecar" diff --exit-code -- contracts/main.tsp contracts/authored.schema.json contracts/instances
+          test "$(git hash-object canary/ores-cli-runtime-env-boundary-module/src/audit/runtime_toml_env_boundary.rs)" = "$ORES_CLI_ENV_BOUNDARY_BLOB"
+          git diff --exit-code -- canary/ores-cli-runtime-env-boundary-module .github/workflows/ores-cli-runtime-env-boundary.yml

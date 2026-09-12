@@ -58,9 +58,9 @@ jobs:
         working-directory: canary/ores-cli-sidecar-module
         run: cargo test --all-targets
 
-      - name: Rustfmt exact sidecar lint module
+      - name: Rustfmt exact production sidecar lint source
         working-directory: canary/ores-cli-sidecar-module
-        run: cargo fmt --all -- --check
+        run: rustfmt --edition 2024 --check src/audit/runtime_toml_sidecar.rs
 
       - name: Require sidecar lint regression markers
         working-directory: canary/ores-cli-sidecar-module

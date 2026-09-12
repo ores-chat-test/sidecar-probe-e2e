@@ -427,9 +427,7 @@ fn is_env_key(value: &str) -> bool {
 
 fn is_sensitive_runtime_key(key: &str) -> bool {
     let upper = key.to_ascii_uppercase();
-    SENSITIVE_KEY_PARTS
-        .iter()
-        .any(|part| upper.contains(part))
+    SENSITIVE_KEY_PARTS.iter().any(|part| upper.contains(part))
 }
 
 fn push_error(report: &mut CommandReport, code: &str, message: &str, target: &str) {
@@ -523,7 +521,10 @@ runtimeKeys = ["WORKER_BATCH_SIZE"]
     fn runtime_update_path_and_cache_fail_closed() {
         let report = audit(
             &OWNER_EXAMPLE
-                .replace("lruConfigPath = \".ores-lru.toml\"", "lruConfigPath = \"../secrets/.ores-lru.toml\"")
+                .replace(
+                    "lruConfigPath = \".ores-lru.toml\"",
+                    "lruConfigPath = \"../secrets/.ores-lru.toml\"",
+                )
                 .replace("cache = \"runtime-env\"", "cache = \"redis-url\""),
         );
         assert!(has(&report, "sidecar-runtime-lru-path"));

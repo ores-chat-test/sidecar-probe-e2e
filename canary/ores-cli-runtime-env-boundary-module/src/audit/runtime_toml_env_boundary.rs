@@ -150,11 +150,7 @@ fn audit_keyed_env_family(
             continue;
         }
         if let Some(env_key) = table.get(key_field).and_then(Value::as_str) {
-            record_env_only(
-                env_only_sources,
-                env_key,
-                format!("{file}:env[{index}]"),
-            );
+            record_env_only(env_only_sources, env_key, format!("{file}:env[{index}]"));
         }
     }
 }
@@ -201,11 +197,7 @@ fn audit_rpc(
             );
         }
         if let Some(env_key) = table.get("env").and_then(Value::as_str) {
-            record_env_only(
-                env_only_sources,
-                env_key,
-                format!("{FILE}:env[{index}]"),
-            );
+            record_env_only(env_only_sources, env_key, format!("{FILE}:env[{index}]"));
         }
     }
 }
@@ -256,7 +248,10 @@ fn record_env_only(
     if env_key.trim().is_empty() {
         return;
     }
-    sources.entry(env_key.to_owned()).or_default().insert(source);
+    sources
+        .entry(env_key.to_owned())
+        .or_default()
+        .insert(source);
 }
 
 fn read_toml(root: &Path, file: &str, report: &mut CommandReport) -> Option<Value> {
